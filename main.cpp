@@ -3,7 +3,11 @@
 //
 #include "binToMot.h"
 
-int main(int argc, char* argv[])
+int main()
 {
-    return binToMot(argc, argv);
+    Params params;
+    params.end_addr = 0x43FF;
+    params.input_filename = "CEM_DONOR_FULL.bin";
+    params.output_filename = "output.mot";
+    return binToMot(params);
 }

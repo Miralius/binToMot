@@ -20,65 +20,40 @@
 #include <cstring>
 #include <cstdint>
 #include <sys/stat.h>
+#include <string>
+#include <optional>
 
 #define SREC_VER "1.43"
 
 #define HEADER2 "Copyright (c) 2000-2014 Ant Goffart - http://www.s-record.com/\n\n"
 
-#ifndef FALSE
-#define FALSE (0)
-#endif
-#ifndef TRUE
-#define TRUE (~FALSE)
-#endif
-
-#define max(a, b) (((a)>(b))?(a):(b))
-#define min(a, b) (((a)<(b))?(a):(b))
-
 #define HEADER1 "\nBIN2SREC " SREC_VER " - Convert binary to Motorola S-Record file.\n"
 
-char *filename;
+std::string input_filename;
 FILE *infile;
+std::string output_filename;
+FILE *outfile;
 
 uint32_t addr_offset = 0;
 uint32_t begin_addr;
 uint32_t end_addr;
 int addr_bytes = 2;
-int do_headers = TRUE;
-int verbose = TRUE;
-int line_length = 32;
+int do_headers = true;
+int verbose = true;
+uint32_t line_length = 32;
 
-
-/***************************************************************************/
-
-unsigned int char_to_uint(char c) {
-    int res = 0;
-
-    if (c >= '0' && c <= '9')
-        res = (c - '0');
-    else if (c >= 'A' && c <= 'F')
-        res = (c - 'A' + 10);
-    else if (c >= 'a' && c <= 'f')
-        res = (c - 'a' + 10);
-
-    return (res);
-}
-
-/***************************************************************************/
-
-uint32_t str_to_uint32(const char *s) {
-    int i;
-    char c;
-    uint32_t res = 0;
-
-    for (i = 0; (i < 8) && (s[i] != '\0'); i++) {
-        c = s[i];
-        res <<= 4;
-        res += char_to_uint(c);
-    }
-
-    return (res);
-}
+struct Params
+{
+    std::optional<uint32_t> addr_offset;
+    std::optional<uint32_t> begin_addr;
+    std::optional<uint32_t> end_addr;
+    std::optional<int> addr_bytes;
+    std::optional<uint32_t> line_length;
+    std::optional<bool> do_headers;
+    std::optional<bool> verbose;
+    std::string input_filename;
+    std::string output_filename;
+};
 
 /***************************************************************************/
 
@@ -113,7 +88,8 @@ void syntax() {
 void process() {
     int i;
     uint32_t max_addr, address;
-    int byte_count, this_line;
+    uint32_t byte_count;
+    uint32_t this_line;
     unsigned char checksum;
     uint32_t c;
     int record_count = 0;
@@ -133,16 +109,17 @@ void process() {
     if (verbose) {
         fprintf(stderr, HEADER1);
         fprintf(stderr, HEADER2);
-        fprintf(stderr, "Input binary file: %s\n", filename);
-        fprintf(stderr, "Begin address   = %Xh\n", begin_addr);
-        fprintf(stderr, "End address     = %Xh\n", end_addr);
-        fprintf(stderr, "Address offset  = %Xh\n", addr_offset);
-        fprintf(stderr, "Maximum address = %Xh\n", max_addr);
-        fprintf(stderr, "Address bytes   = %d\n", addr_bytes);
+        fprintf(stderr, "Input binary file:  %s\n", input_filename.c_str());
+        fprintf(stderr, "Output binary file: %s\n", output_filename.c_str());
+        fprintf(stderr, "Begin address     = %Xh\n", begin_addr);
+        fprintf(stderr, "End address       = %Xh\n", end_addr);
+        fprintf(stderr, "Address offset    = %Xh\n", addr_offset);
+        fprintf(stderr, "Maximum address   = %Xh\n", max_addr);
+        fprintf(stderr, "Address bytes     = %d\n", addr_bytes);
     }
 
     if (do_headers)
-        printf("S00600004844521B\n");       /* Header record */
+        fprintf(outfile, "S00600004844521B\n");       /* Header record */
 
     address = addr_offset;
 
@@ -150,26 +127,26 @@ void process() {
         if (verbose)
             fprintf(stderr, "Processing %08Xh\r", address);
 
-        this_line = min(line_length, (max_addr - address) + 1);
+        this_line = std::min(line_length, (max_addr - address) + 1);
         byte_count = (addr_bytes + this_line + 1);
-        printf("S%d%02X", addr_bytes - 1, byte_count);
+        fprintf(outfile, "S%d%02X", addr_bytes - 1, byte_count);
 
         checksum = byte_count;
 
         for (i = addr_bytes - 1; i >= 0; i--) {
             c = (address >> (i << 3)) & 0xff;
-            printf("%02X", c);
+            fprintf(outfile, "%02X", c);
             checksum += c;
         }
 
         fread(buf, 1, this_line, infile);
 
         for (i = 0; i < this_line; i++) {
-            printf("%02X", buf[i]);
+            fprintf(outfile, "%02X", buf[i]);
             checksum += buf[i];
         }
 
-        printf("%02X\n", 255 - checksum);
+        fprintf(outfile, "%02X\n", 255 - checksum);
 
         record_count++;
 
@@ -183,23 +160,23 @@ void process() {
     if (do_headers) {
         if (record_count > 0xffff) {
             checksum = 4 + (record_count & 0xff) + ((record_count >> 8) & 0xff) + ((record_count >> 16) & 0xff);
-            printf("S604%06X%02X\n", record_count, 255 - checksum);
+            fprintf(outfile, "S604%06X%02X\n", record_count, 255 - checksum);
         } else {
             checksum = 3 + (record_count & 0xff) + ((record_count >> 8) & 0xff);
-            printf("S503%04X%02X\n", record_count, 255 - checksum);
+            fprintf(outfile, "S503%04X%02X\n", record_count, 255 - checksum);
         }
 
         byte_count = (addr_bytes + 1);
-        printf("S%d%02X", 11 - addr_bytes, byte_count);
+        fprintf(outfile, "S%d%02X", 11 - addr_bytes, byte_count);
 
         checksum = byte_count;
 
         for (i = addr_bytes - 1; i >= 0; i--) {
             c = (addr_offset >> (i << 3)) & 0xff;
-            printf("%02X", c);
+            fprintf(outfile, "%02X", c);
             checksum += c;
         }
-        printf("%02X\n", 255 - checksum);
+        fprintf(outfile, "%02X\n", 255 - checksum);
     }
 
     if (verbose)
@@ -208,62 +185,52 @@ void process() {
 
 /***************************************************************************/
 
-int binToMot(int argc, char *argv[]) {
-    int i;
-    uint32_t size;
-    int offset_specified = FALSE;
-    int end_specified = FALSE;
+int binToMot(const Params& params) {
 
-    for (i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "-o")) {
-            addr_offset = str_to_uint32(argv[++i]);
-            offset_specified = TRUE;
-            continue;
-        } else if (!strcmp(argv[i], "-b")) {
-            begin_addr = str_to_uint32(argv[++i]);
-            continue;
-        } else if (!strcmp(argv[i], "-e")) {
-            end_addr = str_to_uint32(argv[++i]);
-            end_specified = TRUE;
-            continue;
-        } else if (!strcmp(argv[i], "-a")) {
-            sscanf_s(argv[++i], "%d", &addr_bytes);
-            addr_bytes = max(2, addr_bytes);
-            addr_bytes = min(4, addr_bytes);
-            continue;
-        } else if (!strcmp(argv[i], "-l")) {
-            sscanf_s(argv[++i], "%d", &line_length);
-            line_length = max(8, line_length);
-            line_length = min(32, line_length);
-            continue;
-        } else if (!strcmp(argv[i], "-s")) {
-            do_headers = FALSE;
-            continue;
-        } else if (!strcmp(argv[i], "-q")) {
-            verbose = FALSE;
-            continue;
-        } else if (!strncmp(argv[i], "-h", 2))         /* -h or -help */
-        {
-            syntax();
-            return (0);
-        } else {
-            filename = argv[i];
-        }
-    }
-
-    if (filename == nullptr) {
+    if (params.input_filename.empty() or params.output_filename.empty()) {
         syntax();
-        fprintf(stderr, "\n** No input filename specified\n");
+        fprintf(stderr, "\n** No input/output filename specified\n");
         return (1);
     }
 
-    if (fopen_s(&infile, filename, "rb") == NULL) {
-        size = file_size(infile) - 1;
-
-        if (end_specified)
-            end_addr = min(size, end_addr);
-        else
-            end_addr = size;
+    if (fopen_s(&infile, input_filename.c_str(), "rb") == NULL
+    and fopen_s(&outfile, output_filename.c_str(), "w") == NULL) {
+        uint32_t size = file_size(infile) - 1;
+        begin_addr = params.begin_addr ? *params.begin_addr : 0u;
+        addr_offset = params.addr_offset ? *params.addr_offset : begin_addr;
+        end_addr = params.end_addr ? std::min(size, *params.end_addr) : size;
+        if (params.addr_bytes)
+        {
+            if (*params.addr_bytes > 4)
+            {
+                addr_bytes = 4;
+            }
+            else if (*params.addr_bytes < 2)
+            {
+                addr_bytes = 2;
+            }
+            else
+            {
+                addr_bytes = *params.addr_bytes;
+            }
+        }
+        if (params.line_length)
+        {
+            if (*params.line_length > 32)
+            {
+                line_length = 32;
+            }
+            else if (*params.line_length < 8)
+            {
+                line_length = 8;
+            }
+            else
+            {
+                line_length = *params.line_length;
+            }
+        }
+        do_headers = !params.do_headers || *params.do_headers;
+        verbose = !params.verbose || *params.verbose;
 
         if (begin_addr > size) {
             fprintf(stderr, "Begin address %Xh is greater than file size %Xh\n", begin_addr, size);
@@ -275,14 +242,11 @@ int binToMot(int argc, char *argv[]) {
             return (3);
         }
 
-        if (!offset_specified)
-            addr_offset = begin_addr;
-
         process();
         fclose(infile);
         return (0);
     } else {
-        fprintf(stderr, "Input file %s not found\n", filename);
+        fprintf(stderr, "Input file %s not found\n", input_filename.c_str());
         return (2);
     }
 }
