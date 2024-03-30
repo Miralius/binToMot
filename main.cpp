@@ -9,5 +9,6 @@ int main()
     params.end_addr = 0x43FF;
     params.input_filename = "CEM_DONOR_FULL.bin";
     params.output_filename = "output.mot";
+    params.do_headers = false;
     return binToMot(params);
 }

@@ -192,6 +192,11 @@ int binToMot(const Params& params) {
         fprintf(stderr, "\n** No input/output filename specified\n");
         return (1);
     }
+    else
+    {
+        input_filename = params.input_filename;
+        output_filename = params.output_filename;
+    }
 
     if (fopen_s(&infile, input_filename.c_str(), "rb") == NULL
     and fopen_s(&outfile, output_filename.c_str(), "w") == NULL) {
