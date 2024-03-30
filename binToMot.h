@@ -16,17 +16,14 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.  
 */  
   
-#include <stdio.h>  
-#include <string.h>  
-#include <stdint.h>  
+#include <cstdio>
+#include <cstring>
+#include <cstdint>
 #include <sys/stat.h>   
   
 #define SREC_VER "1.43"  
   
-#define HEADER2 "Copyright (c) 2000-2014 Ant Goffart - http://www.s-record.com/\n\n"  
-  
-#include <stdio.h>  
-#include <stdint.h>  
+#define HEADER2 "Copyright (c) 2000-2014 Ant Goffart - http://www.s-record.com/\n\n"
   
 #ifndef FALSE  
 #define FALSE (0)  
@@ -70,7 +67,7 @@ unsigned int char_to_uint(char c)
   
 /***************************************************************************/  
   
-uint32_t str_to_uint32(char *s)  
+uint32_t str_to_uint32(const char *s)
 {  
     int i;  
     char c;  
@@ -90,16 +87,16 @@ uint32_t str_to_uint32(char *s)
   
 uint32_t file_size(FILE *f)  
 {  
-    struct stat info;  
+    struct stat info{};
   
-    if (!fstat(fileno(f), &info))  
+    if (!fstat(_fileno(f), &info))
         return((uint32_t)info.st_size);  
     else  
         return(0);  
 }    
 /***************************************************************************/  
   
-void syntax(void)  
+void syntax()
 {  
     fprintf(stderr, HEADER1);  
     fprintf(stderr, HEADER2);  
@@ -117,7 +114,7 @@ void syntax(void)
   
 /***************************************************************************/  
   
-void process(void)  
+void process()
 {  
     int i;  
     uint32_t max_addr, address;  
@@ -130,7 +127,7 @@ void process(void)
   
     max_addr = addr_offset + (end_addr - begin_addr);  
   
-    fseek(infile, begin_addr, SEEK_SET);  
+    fseek(infile, static_cast<int>(begin_addr), SEEK_SET);
   
     if ((max_addr > 0xffffl) && (addr_bytes < 3))  
         addr_bytes = 3;  
@@ -256,7 +253,7 @@ int binToMot(int argc, char *argv[])
   
         else if (!strcmp(argv[i], "-a"))  
         {  
-            sscanf(argv[++i], "%d", &addr_bytes);  
+            sscanf_s(argv[++i], "%d", &addr_bytes);
             addr_bytes = max(2, addr_bytes);  
             addr_bytes = min(4, addr_bytes);  
             continue;  
@@ -264,7 +261,7 @@ int binToMot(int argc, char *argv[])
   
         else if (!strcmp(argv[i], "-l"))  
         {  
-            sscanf(argv[++i], "%d", &line_length);  
+            sscanf_s(argv[++i], "%d", &line_length);
             line_length = max(8, line_length);  
             line_length = min(32, line_length);  
             continue;  
@@ -294,14 +291,14 @@ int binToMot(int argc, char *argv[])
         }  
     }  
   
-    if (filename == NULL)  
+    if (filename == nullptr)
     {  
         syntax();  
         fprintf(stderr, "\n** No input filename specified\n");  
         return(1);  
     }  
   
-    if ((infile = fopen(filename, "rb")) != NULL)  
+    if (fopen_s(&infile, filename, "rb") == NULL)
     {  
         size = file_size(infile) - 1;  
   
