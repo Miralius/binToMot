@@ -51,6 +51,7 @@ struct Params
     std::optional<uint32_t> line_length;
     std::optional<bool> do_headers;
     std::optional<bool> verbose;
+    std::optional<bool> appendingMode;
     std::string input_filename;
     std::string output_filename;
 };
@@ -198,8 +199,10 @@ int binToMot(const Params& params) {
         output_filename = params.output_filename;
     }
 
+    const char* writingFileMode = params.appendingMode ? (*params.appendingMode ? "a" : "w") : "w";
+
     if (fopen_s(&infile, input_filename.c_str(), "rb") == NULL
-    and fopen_s(&outfile, output_filename.c_str(), "w") == NULL) {
+    and fopen_s(&outfile, output_filename.c_str(), writingFileMode) == NULL) {
         uint32_t size = file_size(infile) - 1;
         begin_addr = params.begin_addr ? *params.begin_addr : 0u;
         addr_offset = params.addr_offset ? *params.addr_offset : begin_addr;
@@ -249,6 +252,7 @@ int binToMot(const Params& params) {
 
         process();
         fclose(infile);
+        fclose(outfile);
         return (0);
     } else {
         fprintf(stderr, "Input file %s not found\n", input_filename.c_str());
