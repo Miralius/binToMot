@@ -38,22 +38,24 @@ uint32_t addr_offset = 0;
 uint32_t begin_addr;
 uint32_t end_addr;
 int addr_bytes = 2;
-int do_headers = true;
-int verbose = true;
+bool do_headers = true;
+bool verbose = true;
+bool is_the_last_block = false;
 uint32_t line_length = 32;
 
 struct Params
 {
-    std::optional<uint32_t> addr_offset;
-    std::optional<uint32_t> begin_addr;
-    std::optional<uint32_t> end_addr;
+    uint32_t begin_addr;
+    uint32_t end_addr;
+    bool appendingMode;
+    bool isTheLastBlock;
+    std::string input_filename;
+    std::string output_filename;
     std::optional<int> addr_bytes;
+    std::optional<uint32_t> addr_offset;
     std::optional<uint32_t> line_length;
     std::optional<bool> do_headers;
     std::optional<bool> verbose;
-    std::optional<bool> appendingMode;
-    std::string input_filename;
-    std::string output_filename;
 };
 
 /***************************************************************************/
@@ -158,26 +160,8 @@ void process() {
         address += line_length;
     }
 
-    if (do_headers) {
-        if (record_count > 0xffff) {
-            checksum = 4 + (record_count & 0xff) + ((record_count >> 8) & 0xff) + ((record_count >> 16) & 0xff);
-            fprintf(outfile, "S604%06X%02X\n", record_count, 255 - checksum);
-        } else {
-            checksum = 3 + (record_count & 0xff) + ((record_count >> 8) & 0xff);
-            fprintf(outfile, "S503%04X%02X\n", record_count, 255 - checksum);
-        }
-
-        byte_count = (addr_bytes + 1);
-        fprintf(outfile, "S%d%02X", 11 - addr_bytes, byte_count);
-
-        checksum = byte_count;
-
-        for (i = addr_bytes - 1; i >= 0; i--) {
-            c = (addr_offset >> (i << 3)) & 0xff;
-            fprintf(outfile, "%02X", c);
-            checksum += c;
-        }
-        fprintf(outfile, "%02X\n", 255 - checksum);
+    if (is_the_last_block) {
+        fprintf(outfile, "S903%04X%02X\n", 0, 252);
     }
 
     if (verbose)
@@ -199,14 +183,15 @@ int binToMot(const Params& params) {
         output_filename = params.output_filename;
     }
 
-    const char* writingFileMode = params.appendingMode ? (*params.appendingMode ? "a" : "w") : "w";
+    const auto writingFileMode = params.appendingMode ? "a" : "w";
 
     if (fopen_s(&infile, input_filename.c_str(), "rb") == NULL
     and fopen_s(&outfile, output_filename.c_str(), writingFileMode) == NULL) {
+        is_the_last_block = params.isTheLastBlock;
         uint32_t size = file_size(infile) - 1;
-        begin_addr = params.begin_addr ? *params.begin_addr : 0u;
+        begin_addr = params.begin_addr;
         addr_offset = params.addr_offset ? *params.addr_offset : begin_addr;
-        end_addr = params.end_addr ? std::min(size, *params.end_addr) : size;
+        end_addr = std::min(size, params.end_addr);
         if (params.addr_bytes)
         {
             if (*params.addr_bytes > 4)
